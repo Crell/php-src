@@ -282,7 +282,9 @@ END_EXTERN_C()
 #define ZEND_MATCH_ERROR                197
 #define ZEND_JMP_NULL                   198
 #define ZEND_CHECK_UNDEF_ARGS           199
+#define ZEND_SEND_PLACEHOLDER           200
+#define ZEND_BUILD_PARTIAL              201
 
-#define ZEND_VM_LAST_OPCODE             199
+#define ZEND_VM_LAST_OPCODE             202
 
 #endif

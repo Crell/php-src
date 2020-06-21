@@ -1900,6 +1900,9 @@ ZEND_API bool ZEND_FASTCALL zend_parse_arg_str_weak(zval *arg, zend_string **des
 ZEND_API bool ZEND_FASTCALL zend_parse_arg_number_slow(zval *arg, zval **dest);
 ZEND_API bool ZEND_FASTCALL zend_parse_arg_str_or_long_slow(zval *arg, zend_string **dest_str, zend_long *dest_long);
 
+ZEND_NAMED_FUNCTION(zend_partial_closure_handler);
+void ZEND_FASTCALL zend_make_partial_closure(zend_function *fbc, INTERNAL_FUNCTION_PARAMETERS);
+
 static zend_always_inline bool zend_parse_arg_bool(zval *arg, zend_bool *dest, zend_bool *is_null, bool check_null)
 {
 	if (check_null) {

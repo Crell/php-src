@@ -3409,6 +3409,14 @@ uint32_t zend_compile_args(
 			}
 
 			arg_count++;
+
+			if (arg->kind == ZEND_AST_PARTIAL_PLACEHOLDER) {
+				opline = zend_emit_op(NULL, ZEND_SEND_PLACEHOLDER, NULL, NULL);
+				opline->op2.opline_num = arg_num;
+				opline->result.var = EX_NUM_TO_VAR(arg_num - 1);
+				continue;
+			}
+
 		}
 
 		if (zend_is_call(arg)) {
