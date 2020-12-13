@@ -285,6 +285,6 @@ END_EXTERN_C()
 #define ZEND_SEND_PLACEHOLDER           200
 #define ZEND_BUILD_PARTIAL              201
 
-#define ZEND_VM_LAST_OPCODE             202
+#define ZEND_VM_LAST_OPCODE             201
 
 #endif
