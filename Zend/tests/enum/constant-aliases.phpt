@@ -10,7 +10,6 @@ die("skip, not yet implemented");
 enum Foo {
     case Bar;
     const Other = self::Bar;
-    const Again = static::Bar;
 }
 
 function test(Foo $var) {
@@ -18,7 +17,6 @@ function test(Foo $var) {
 }
 
 test(Foo:Other);
-test(Foo:Again);
 
 ?>
 --EXPECTF--
