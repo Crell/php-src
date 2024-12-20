@@ -1151,6 +1151,25 @@ ZEND_API zend_result ZEND_FASTCALL add_function(zval *result, zval *op1, zval *o
 }
 /* }}} */
 
+ZEND_API zend_result ZEND_FASTCALL pipe_function(zval *result, zval *op1, zval *op2) /* {{{ */
+{
+	// Ensure right side (op2) is a callable.
+//	if (!zend_is_callable(&op2, NULL, 0, NULL, NULL, &error)) {
+//		zend_argument_type_error(2, "must be an callable, %s", error);
+//		efree(error);
+//		return FAILURE;
+//	}
+	// Call rhs(lhs)
+	zend_compile_init_user_func()
+
+	// assign result to result.
+
+
+
+    return SUCCESS;
+}
+/* }}} */
+
 static zend_always_inline zend_result sub_function_fast(zval *result, zval *op1, zval *op2) /* {{{ */
 {
 	uint8_t type_pair = TYPE_PAIR(Z_TYPE_P(op1), Z_TYPE_P(op2));
