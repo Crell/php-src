@@ -1153,20 +1153,27 @@ ZEND_API zend_result ZEND_FASTCALL add_function(zval *result, zval *op1, zval *o
 
 ZEND_API zend_result ZEND_FASTCALL pipe_function(zval *result, zval *op1, zval *op2) /* {{{ */
 {
-	// Ensure right side (op2) is a callable.
-//	if (!zend_is_callable(&op2, NULL, 0, NULL, NULL, &error)) {
-//		zend_argument_type_error(2, "must be an callable, %s", error);
-//		efree(error);
-//		return FAILURE;
-//	}
-	// Call rhs(lhs)
-	zend_compile_init_user_func()
+	zend_fcall_info fci;
 
-	// assign result to result.
+	fci.retval = result;
+	fci.function_name = *op2;
+	fci.param_count = 1;
+	fci.params = op1;
+	fci.named_params = NULL;
+	fci.size = sizeof(fci);
 
+	if (zend_call_function(&fci, NULL) == SUCCESS && Z_TYPE(result) != IS_UNDEF) {
+		return SUCCESS;
+	}
 
+	if (!EG(exception)) {
+		// @todo Error handling of some kind?
+		return FAILURE;
+	}
 
-    return SUCCESS;
+	// @todo Error handling if an exception is thrown, I think?
+
+	return SUCCESS;
 }
 /* }}} */
 
