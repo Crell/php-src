@@ -60,15 +60,20 @@ if test "$PHP_LDAP" != "no"; then
     [-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1])
 
   AS_VAR_IF([PHP_LDAP], [yes], [
-    PKG_CHECK_MODULES([LDAP], [lber ldap])
-    PHP_LDAP_PKGCONFIG=true
-  ], [PHP_LDAP_CHECKS([$PHP_LDAP])])
+    PKG_CHECK_MODULES([LDAP], [lber ldap],
+      PHP_LDAP_PKGCONFIG=true, PHP_LDAP_PKGCONFIG=false)])
 
   AS_IF([test "$PHP_LDAP_PKGCONFIG" = true], [
     PHP_EVAL_INCLINE([$LDAP_CFLAGS])
     PHP_EVAL_LIBLINE([$LDAP_LIBS], [LDAP_SHARED_LIBADD])
   ], [
-    AS_VAR_IF([LDAP_DIR],, [AC_MSG_ERROR([Cannot find ldap.h])])
+    AS_VAR_IF([PHP_LDAP], [yes], [
+      for i in /usr/local /usr; do
+        PHP_LDAP_CHECKS([$i])
+      done
+    ], [PHP_LDAP_CHECKS([$PHP_LDAP])])
+    AC_MSG_CHECKING([for ldap.h])
+    AS_VAR_IF([LDAP_DIR],, [AC_MSG_ERROR([Cannot find ldap.h])], AC_MSG_RESULT([$LDAP_DIR]))
 
     dnl -pc removal is a hack for clang
     MACHINE_INCLUDES=$($CC -dumpmachine | $SED 's/-pc//')
@@ -86,14 +91,17 @@ if test "$PHP_LDAP" != "no"; then
     elif test -f $LDAP_LIBDIR/libclntsh.$SHLIB_SUFFIX_NAME.12.1 || test -f $LDAP_LIBDIR/$MACHINE_INCLUDES/libclntsh.$SHLIB_SUFFIX_NAME.12.1; then
       PHP_ADD_LIBRARY_WITH_PATH([clntsh], [$LDAP_LIBDIR], [LDAP_SHARED_LIBADD])
       AC_DEFINE([HAVE_ORALDAP], [1])
+      AC_MSG_WARN([Build with Oracle Instant Client is deprecated as of PHP 8.5])
 
     elif test -f $LDAP_LIBDIR/libclntsh.$SHLIB_SUFFIX_NAME.11.1 || test -f $LDAP_LIBDIR/$MACHINE_INCLUDES/libclntsh.$SHLIB_SUFFIX_NAME.11.1; then
       PHP_ADD_LIBRARY_WITH_PATH([clntsh], [$LDAP_LIBDIR], [LDAP_SHARED_LIBADD])
       AC_DEFINE([HAVE_ORALDAP], [1])
+      AC_MSG_WARN([Build with Oracle Instant Client is deprecated as of PHP 8.5])
 
     elif test -f $LDAP_LIBDIR/libclntsh.$SHLIB_SUFFIX_NAME || test -f $LDAP_LIBDIR/$MACHINE_INCLUDES/libclntsh.$SHLIB_SUFFIX_NAME; then
-       PHP_ADD_LIBRARY_WITH_PATH([clntsh], [$LDAP_LIBDIR], [LDAP_SHARED_LIBADD])
-       AC_DEFINE([HAVE_ORALDAP], [1])
+      PHP_ADD_LIBRARY_WITH_PATH([clntsh], [$LDAP_LIBDIR], [LDAP_SHARED_LIBADD])
+      AC_DEFINE([HAVE_ORALDAP], [1])
+      AC_MSG_WARN([Build with Oracle Instant Client is deprecated as of PHP 8.5])
 
     else
       AC_MSG_ERROR([Cannot find ldap libraries in $LDAP_LIBDIR.])

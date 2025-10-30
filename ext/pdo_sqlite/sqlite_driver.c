@@ -255,7 +255,20 @@ static bool sqlite_handle_begin(pdo_dbh_t *dbh)
 {
 	pdo_sqlite_db_handle *H = (pdo_sqlite_db_handle *)dbh->driver_data;
 
-	if (sqlite3_exec(H->db, "BEGIN", NULL, NULL, NULL) != SQLITE_OK) {
+	const char *begin_statement = "BEGIN";
+	switch (H->transaction_mode) {
+		case PDO_SQLITE_TRANSACTION_MODE_DEFERRED:
+			begin_statement = "BEGIN DEFERRED TRANSACTION";
+			break;
+		case PDO_SQLITE_TRANSACTION_MODE_IMMEDIATE:
+			begin_statement = "BEGIN IMMEDIATE TRANSACTION";
+			break;
+		case PDO_SQLITE_TRANSACTION_MODE_EXCLUSIVE:
+			begin_statement = "BEGIN EXCLUSIVE TRANSACTION";
+			break;
+	}
+
+	if (sqlite3_exec(H->db, begin_statement, NULL, NULL, NULL) != SQLITE_OK) {
 		pdo_sqlite_error(dbh);
 		return false;
 	}
@@ -286,10 +299,15 @@ static bool sqlite_handle_rollback(pdo_dbh_t *dbh)
 
 static int pdo_sqlite_get_attribute(pdo_dbh_t *dbh, zend_long attr, zval *return_value)
 {
+	pdo_sqlite_db_handle *H = (pdo_sqlite_db_handle *)dbh->driver_data;
+
 	switch (attr) {
 		case PDO_ATTR_CLIENT_VERSION:
 		case PDO_ATTR_SERVER_VERSION:
 			ZVAL_STRING(return_value, (char *)sqlite3_libversion());
+			break;
+		case PDO_SQLITE_ATTR_TRANSACTION_MODE:
+			ZVAL_LONG(return_value, H->transaction_mode);
 			break;
 
 		default:
@@ -326,6 +344,19 @@ static bool pdo_sqlite_set_attr(pdo_dbh_t *dbh, zend_long attr, zval *val)
 			}
 			sqlite3_extended_result_codes(H->db, lval);
 			return true;
+		case PDO_SQLITE_ATTR_TRANSACTION_MODE:
+			if (!pdo_get_long_param(&lval, val)) {
+				return false;
+			}
+			switch (lval) {
+				case PDO_SQLITE_TRANSACTION_MODE_DEFERRED:
+				case PDO_SQLITE_TRANSACTION_MODE_IMMEDIATE:
+				case PDO_SQLITE_TRANSACTION_MODE_EXCLUSIVE:
+					H->transaction_mode = lval;
+					return true;
+				default:
+					return false;
+			}
 	}
 	return false;
 }
@@ -483,20 +514,20 @@ static int php_sqlite3_collation_callback(void *context, int string1_len, const 
 
 	zend_call_known_fcc(&collation->callback, &retval, /* argc */ 2, zargs, /* named_params */ NULL);
 
-	if (!Z_ISUNDEF(retval)) {
-		if (Z_TYPE(retval) != IS_LONG) {
-			convert_to_long(&retval);
-		}
-		if (Z_LVAL(retval) > 0) {
-			ret = 1;
-		} else if (Z_LVAL(retval) < 0) {
-			ret = -1;
-		}
-		zval_ptr_dtor(&retval);
-	}
-
 	zval_ptr_dtor(&zargs[0]);
 	zval_ptr_dtor(&zargs[1]);
+
+	if (!Z_ISUNDEF(retval)) {
+		if (Z_TYPE(retval) != IS_LONG) {
+			zend_string *func_name = get_active_function_or_method_name();
+			zend_type_error("%s(): Return value of the collation callback must be of type int, %s returned",
+				ZSTR_VAL(func_name), zend_zval_value_name(&retval));
+			zend_string_release(func_name);
+			zval_ptr_dtor(&retval);
+			return FAILURE;
+		}
+		ret = ZEND_NORMALIZE_BOOL(Z_LVAL(retval));
+	}
 
 	return ret;
 }

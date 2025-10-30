@@ -260,19 +260,16 @@ static zend_result spl_filesystem_object_get_file_name(spl_filesystem_object *in
 	return SUCCESS;
 } /* }}} */
 
-/* TODO Make void or have callers check return value */
-static bool spl_filesystem_dir_read(spl_filesystem_object *intern) /* {{{ */
+static void spl_filesystem_dir_read(spl_filesystem_object *intern) /* {{{ */
 {
 	if (intern->file_name) {
 		/* invalidate */
 		zend_string_release(intern->file_name);
 		intern->file_name = NULL;
 	}
+
 	if (!intern->u.dir.dirp || !php_stream_readdir(intern->u.dir.dirp, &intern->u.dir.entry)) {
 		intern->u.dir.entry.d_name[0] = '\0';
-		return 0;
-	} else {
-		return 1;
 	}
 }
 /* }}} */
@@ -496,7 +493,7 @@ static spl_filesystem_object *spl_filesystem_object_create_info(zend_string *fil
 static spl_filesystem_object *spl_filesystem_object_create_type(int num_args, spl_filesystem_object *source, int type, zend_class_entry *ce, zval *return_value) /* {{{ */
 {
 	spl_filesystem_object *intern;
-	bool use_include_path = 0;
+	bool use_include_path = false;
 	zval arg1, arg2;
 	zend_error_handling error_handling;
 
@@ -2017,7 +2014,7 @@ PHP_METHOD(SplFileObject, __construct)
 	zend_string *file_name = NULL;
 	zend_string *open_mode = ZSTR_CHAR('r');
 	zval *stream_context = NULL;
-	bool use_include_path = 0;
+	bool use_include_path = false;
 	size_t path_len;
 	zend_error_handling error_handling;
 

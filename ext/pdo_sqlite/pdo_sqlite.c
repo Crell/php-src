@@ -376,6 +376,9 @@ static int php_sqlite_collation_callback(void *context, int string1_len, const v
 
 	zend_call_known_fcc(&collation->callback, &retval, /* argc */ 2, zargs, /* named_params */ NULL);
 
+	zval_ptr_dtor(&zargs[0]);
+	zval_ptr_dtor(&zargs[1]);
+
 	if (!Z_ISUNDEF(retval)) {
 		if (Z_TYPE(retval) != IS_LONG) {
 			zend_string *func_name = get_active_function_or_method_name();
@@ -385,15 +388,8 @@ static int php_sqlite_collation_callback(void *context, int string1_len, const v
 			zval_ptr_dtor(&retval);
 			return FAILURE;
 		}
-		if (Z_LVAL(retval) > 0) {
-			ret = 1;
-		} else if (Z_LVAL(retval) < 0) {
-			ret = -1;
-		}
+		ret = ZEND_NORMALIZE_BOOL(Z_LVAL(retval));
 	}
-
-	zval_ptr_dtor(&zargs[0]);
-	zval_ptr_dtor(&zargs[1]);
 
 	return ret;
 }
@@ -408,19 +404,22 @@ PHP_METHOD(Pdo_Sqlite, createCollation)
 	pdo_sqlite_create_collation_internal(INTERNAL_FUNCTION_PARAM_PASSTHRU, php_sqlite_collation_callback);
 }
 
+#define REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85(base_name, value) \
+		REGISTER_PDO_CLASS_CONST_LONG_DEPRECATED_ALIAS_85(base_name, "SQLITE_", "Pdo\\Sqlite::", value)
+
 /* {{{ PHP_MINIT_FUNCTION */
 PHP_MINIT_FUNCTION(pdo_sqlite)
 {
 #ifdef SQLITE_DETERMINISTIC
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_DETERMINISTIC", (zend_long)SQLITE_DETERMINISTIC);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("DETERMINISTIC", (zend_long)SQLITE_DETERMINISTIC);
 #endif
 
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_ATTR_OPEN_FLAGS", (zend_long)PDO_SQLITE_ATTR_OPEN_FLAGS);
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_OPEN_READONLY", (zend_long)SQLITE_OPEN_READONLY);
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_OPEN_READWRITE", (zend_long)SQLITE_OPEN_READWRITE);
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_OPEN_CREATE", (zend_long)SQLITE_OPEN_CREATE);
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_ATTR_READONLY_STATEMENT", (zend_long)PDO_SQLITE_ATTR_READONLY_STATEMENT);
-	REGISTER_PDO_CLASS_CONST_LONG("SQLITE_ATTR_EXTENDED_RESULT_CODES", (zend_long)PDO_SQLITE_ATTR_EXTENDED_RESULT_CODES);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("ATTR_OPEN_FLAGS", (zend_long)PDO_SQLITE_ATTR_OPEN_FLAGS);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("OPEN_READONLY", (zend_long)SQLITE_OPEN_READONLY);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("OPEN_READWRITE", (zend_long)SQLITE_OPEN_READWRITE);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("OPEN_CREATE", (zend_long)SQLITE_OPEN_CREATE);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("ATTR_READONLY_STATEMENT", (zend_long)PDO_SQLITE_ATTR_READONLY_STATEMENT);
+	REGISTER_PDO_SQLITE_CLASS_CONST_LONG_DEPRECATED_ALIAS_85("ATTR_EXTENDED_RESULT_CODES", (zend_long)PDO_SQLITE_ATTR_EXTENDED_RESULT_CODES);
 
 	pdosqlite_ce = register_class_Pdo_Sqlite(pdo_dbh_ce);
 	pdosqlite_ce->create_object = pdo_dbh_new;

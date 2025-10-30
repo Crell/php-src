@@ -230,7 +230,7 @@ void shutdown_ini_scanner(void)
 /* }}} */
 
 /* {{{ zend_ini_scanner_get_lineno() */
-ZEND_COLD int zend_ini_scanner_get_lineno(void)
+ZEND_COLD uint32_t zend_ini_scanner_get_lineno(void)
 {
 	return SCNG(lineno);
 }
@@ -352,16 +352,16 @@ restart:
 /*!re2c
 re2c:yyfill:check = 0;
 LNUM [0-9]+
-DNUM ([0-9]*[\.][0-9]+)|([0-9]+[\.][0-9]*)
+DNUM ([0-9]*[.][0-9]+)|([0-9]+[.][0-9]*)
 NUMBER [-]?{LNUM}|{DNUM}
 ANY_CHAR (.|[\n\t])
 NEWLINE	("\r"|"\n"|"\r\n")
 TABS_AND_SPACES [ \t]
 WHITESPACE [ \t]+
 CONSTANT [a-zA-Z_][a-zA-Z0-9_]*
-LABEL_CHAR [^=\n\r\t;&|^$~(){}!"\[\]\x00]
+LABEL_CHAR [^=\n\r\t;&|^$~(){}!"[\]\x00]
 LABEL ({LABEL_CHAR}+)
-TOKENS [:,.\[\]"'()&|^+-/*=%$!~<>?@{}]
+TOKENS [:,.[\]"'()&|^+-/*=%$!~<>?@{}]
 OPERATORS [&|^~()!]
 DOLLAR_CURLY "${"
 

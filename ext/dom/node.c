@@ -22,6 +22,7 @@
 #include "php.h"
 #if defined(HAVE_LIBXML) && defined(HAVE_DOM)
 #include "php_dom.h"
+#include "obj_map.h"
 #include "namespace_compat.h"
 #include "private_data.h"
 #include "internal_helpers.h"
@@ -51,6 +52,13 @@ zend_string *dom_node_get_node_name_attribute_or_element(const xmlNode *nodep, b
 	if (nodep->ns != NULL && nodep->ns->prefix != NULL) {
 		ret = dom_node_concatenated_name_helper(name_len, (const char *) nodep->name, strlen((const char *) nodep->ns->prefix), (const char *) nodep->ns->prefix);
 	} else {
+		if (name_len == 1) {
+			if (uppercase) {
+				return ZSTR_CHAR(zend_toupper_ascii(*nodep->name));
+			} else {
+				return ZSTR_CHAR((zend_uchar) *nodep->name);
+			}
+		}
 		ret = zend_string_init((const char *) nodep->name, name_len, false);
 	}
 	if (uppercase) {
@@ -88,7 +96,7 @@ zend_result dom_node_node_name_read(dom_object *obj, zval *retval)
 			uppercase = php_dom_follow_spec_intern(obj) && php_dom_ns_is_html_and_document_is_html(nodep);
 			ZEND_FALLTHROUGH;
 		case XML_ATTRIBUTE_NODE:
-			ZVAL_NEW_STR(retval, dom_node_get_node_name_attribute_or_element(nodep, uppercase));
+			ZVAL_STR(retval, dom_node_get_node_name_attribute_or_element(nodep, uppercase));
 			break;
 		case XML_NAMESPACE_DECL: {
 			xmlNsPtr ns = nodep->ns;
@@ -288,7 +296,7 @@ zend_result dom_node_child_nodes_read(dom_object *obj, zval *retval)
 
 	object_init_ex(retval, dom_get_nodelist_ce(php_dom_follow_spec_intern(obj)));
 	dom_object *intern = Z_DOMOBJ_P(retval);
-	dom_namednode_iter(obj, XML_ELEMENT_NODE, intern, NULL, NULL, NULL);
+	php_dom_create_obj_map(obj, intern, NULL, NULL, NULL, &php_dom_obj_map_child_nodes);
 
 	return SUCCESS;
 }
@@ -422,7 +430,7 @@ zend_result dom_node_attributes_read(dom_object *obj, zval *retval)
 	if (nodep->type == XML_ELEMENT_NODE) {
 		object_init_ex(retval, dom_get_namednodemap_ce(php_dom_follow_spec_intern(obj)));
 		dom_object *intern = Z_DOMOBJ_P(retval);
-		dom_namednode_iter(obj, XML_ATTRIBUTE_NODE, intern, NULL, NULL, NULL);
+		php_dom_create_obj_map(obj, intern, NULL, NULL, NULL, &php_dom_obj_map_attributes);
 	} else {
 		ZVAL_NULL(retval);
 	}
@@ -634,7 +642,7 @@ zend_result dom_node_local_name_read(dom_object *obj, zval *retval)
 	DOM_PROP_NODE(xmlNodePtr, nodep, obj);
 
 	if (nodep->type == XML_ELEMENT_NODE || nodep->type == XML_ATTRIBUTE_NODE || nodep->type == XML_NAMESPACE_DECL) {
-		ZVAL_STRING(retval, (char *) (nodep->name));
+		ZVAL_STRING_FAST(retval, (const char *) (nodep->name));
 	} else {
 		ZVAL_NULL(retval);
 	}
@@ -1462,7 +1470,7 @@ PHP_METHOD(DOMNode, cloneNode)
 	zval *id;
 	xmlNode *n, *node;
 	dom_object *intern;
-	bool recursive = 0;
+	bool recursive = false;
 
 	id = ZEND_THIS;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|b", &recursive) == FAILURE) {

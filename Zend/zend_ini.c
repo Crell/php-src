@@ -248,10 +248,16 @@ ZEND_API zend_result zend_register_ini_entries_ex(const zend_ini_entry_def *ini_
 			zend_unregister_ini_entries_ex(module_number, module_type);
 			return FAILURE;
 		}
+
+		zend_string *prev_value = p->value;
+
 		if (((default_value = zend_get_configuration_directive(p->name)) != NULL) &&
 		    (!p->on_modify || p->on_modify(p, Z_STR_P(default_value), p->mh_arg1, p->mh_arg2, p->mh_arg3, ZEND_INI_STAGE_STARTUP) == SUCCESS)) {
 
-			p->value = zend_new_interned_string(zend_string_copy(Z_STR_P(default_value)));
+			/* Skip assigning the value if the handler has already done so. */
+			if (p->value == prev_value) {
+				p->value = zend_new_interned_string(zend_string_copy(Z_STR_P(default_value)));
+			}
 		} else {
 			p->value = ini_entry->value ?
 				zend_string_init_interned(ini_entry->value, ini_entry->value_length, 1) : NULL;
@@ -326,7 +332,7 @@ ZEND_API void zend_ini_refresh_caches(int stage) /* {{{ */
 ZEND_API zend_result zend_alter_ini_entry(zend_string *name, zend_string *new_value, int modify_type, int stage) /* {{{ */
 {
 
-	return zend_alter_ini_entry_ex(name, new_value, modify_type, stage, 0);
+	return zend_alter_ini_entry_ex(name, new_value, modify_type, stage, false);
 }
 /* }}} */
 
@@ -336,7 +342,7 @@ ZEND_API zend_result zend_alter_ini_entry_chars(zend_string *name, const char *v
 	zend_string *new_value;
 
 	new_value = zend_string_init(value, value_length, !(stage & ZEND_INI_STAGE_IN_REQUEST));
-	ret = zend_alter_ini_entry_ex(name, new_value, modify_type, stage, 0);
+	ret = zend_alter_ini_entry_ex(name, new_value, modify_type, stage, false);
 	zend_string_release(new_value);
 	return ret;
 }
@@ -389,14 +395,20 @@ ZEND_API zend_result zend_alter_ini_entry_ex(zend_string *name, zend_string *new
 		zend_hash_add_ptr(EG(modified_ini_directives), ini_entry->name, ini_entry);
 	}
 
+	zend_string *prev_value = ini_entry->value;
 	duplicate = zend_string_copy(new_value);
 
 	if (!ini_entry->on_modify
 		|| ini_entry->on_modify(ini_entry, duplicate, ini_entry->mh_arg1, ini_entry->mh_arg2, ini_entry->mh_arg3, stage) == SUCCESS) {
-		if (modified && ini_entry->orig_value != ini_entry->value) { /* we already changed the value, free the changed value */
-			zend_string_release(ini_entry->value);
+		if (modified && ini_entry->orig_value != prev_value) { /* we already changed the value, free the changed value */
+			zend_string_release(prev_value);
 		}
-		ini_entry->value = duplicate;
+		/* Skip assigning the value if the handler has already done so. */
+		if (ini_entry->value == prev_value) {
+			ini_entry->value = duplicate;
+		} else {
+			zend_string_release(duplicate);
+		}
 	} else {
 		zend_string_release(duplicate);
 		return FAILURE;
@@ -503,7 +515,7 @@ ZEND_API zend_string *zend_ini_str_ex(const char *name, size_t name_length, bool
 	ini_entry = zend_hash_str_find_ptr(EG(ini_directives), name, name_length);
 	if (ini_entry) {
 		if (exists) {
-			*exists = 1;
+			*exists = true;
 		}
 
 		if (orig && ini_entry->modified) {
@@ -513,7 +525,7 @@ ZEND_API zend_string *zend_ini_str_ex(const char *name, size_t name_length, bool
 		}
 	} else {
 		if (exists) {
-			*exists = 0;
+			*exists = false;
 		}
 		return NULL;
 	}
@@ -522,7 +534,7 @@ ZEND_API zend_string *zend_ini_str_ex(const char *name, size_t name_length, bool
 
 ZEND_API zend_string *zend_ini_str(const char *name, size_t name_length, bool orig) /* {{{ */
 {
-	bool exists = 1;
+	bool exists = true;
 	zend_string *return_value;
 
 	return_value = zend_ini_str_ex(name, name_length, orig, &exists);

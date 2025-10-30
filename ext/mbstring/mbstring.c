@@ -313,7 +313,7 @@ static zend_result php_mb_parse_encoding_list(const char *value, size_t value_le
 		list = (const mbfl_encoding **)pecalloc(size, sizeof(mbfl_encoding*), persistent);
 		entry = list;
 		n = 0;
-		included_auto = 0;
+		included_auto = false;
 		p1 = tmpstr;
 		while (1) {
 			const char *comma = memchr(p1, ',', endp - p1);
@@ -333,7 +333,7 @@ static zend_result php_mb_parse_encoding_list(const char *value, size_t value_le
 					const enum mbfl_no_encoding *src = MBSTRG(default_detect_order_list);
 					const size_t identify_list_size = MBSTRG(default_detect_order_list_size);
 					size_t i;
-					included_auto = 1;
+					included_auto = true;
 					for (i = 0; i < identify_list_size; i++) {
 						*entry++ = mbfl_no2encoding(*src++);
 						n++;
@@ -379,7 +379,7 @@ static zend_result php_mb_parse_encoding_array(HashTable *target_hash, const mbf
 	size_t size = zend_hash_num_elements(target_hash) + MBSTRG(default_detect_order_list_size);
 	const mbfl_encoding **list = ecalloc(size, sizeof(mbfl_encoding*));
 	const mbfl_encoding **entry = list;
-	bool included_auto = 0;
+	bool included_auto = false;
 	size_t n = 0;
 	zval *hash_entry;
 	ZEND_HASH_FOREACH_VAL(target_hash, hash_entry) {
@@ -396,7 +396,7 @@ static zend_result php_mb_parse_encoding_array(HashTable *target_hash, const mbf
 				const size_t identify_list_size = MBSTRG(default_detect_order_list_size);
 				size_t j;
 
-				included_auto = 1;
+				included_auto = true;
 				for (j = 0; j < identify_list_size; j++) {
 					*entry++ = mbfl_no2encoding(*src++);
 					n++;
@@ -729,7 +729,7 @@ static zend_result _php_mb_ini_mbstring_http_input_set(const char *new_value, si
 		list = (const mbfl_encoding**)pecalloc(1, sizeof(mbfl_encoding*), 1);
 		*list = &mbfl_encoding_pass;
 		size = 1;
-	} else if (FAILURE == php_mb_parse_encoding_list(new_value, new_value_length, &list, &size, /* persistent */ 1, /* arg_num */ 0) || size == 0) {
+	} else if (FAILURE == php_mb_parse_encoding_list(new_value, new_value_length, &list, &size, /* persistent */ true, /* arg_num */ 0) || size == 0) {
 		return FAILURE;
 	}
 	if (MBSTRG(http_input_list)) {
@@ -1160,8 +1160,8 @@ PHP_RSHUTDOWN_FUNCTION(mbstring)
 	MBSTRG(outconv_state) = 0;
 
 	if (MBSTRG(all_encodings_list)) {
-		GC_DELREF(MBSTRG(all_encodings_list));
-		zend_array_destroy(MBSTRG(all_encodings_list));
+		/* must be *array* release to remove from GC root buffer and free the hashtable itself */
+		zend_array_release(MBSTRG(all_encodings_list));
 		MBSTRG(all_encodings_list) = NULL;
 	}
 
@@ -1584,10 +1584,22 @@ PHP_FUNCTION(mb_output_handler)
 		if (SG(sapi_headers).send_default_content_type || free_mimetype) {
 			const char *charset = encoding->mime_name;
 			if (charset) {
-				char *p;
-				size_t len = spprintf(&p, 0, "Content-Type: %s; charset=%s",  mimetype, charset);
-				if (sapi_add_header(p, len, 0) != FAILURE) {
-					SG(sapi_headers).send_default_content_type = 0;
+				/* Don't try to add a header if we are in an output handler;
+				 * we aren't supposed to directly access the output globals
+				 * from outside of main/output.c, so just try to get the flags
+				 * for the currently running handler, will only succeed if
+				 * there is a handler running. */
+				int unused;
+				bool in_handler = php_output_handler_hook(
+					PHP_OUTPUT_HANDLER_HOOK_GET_FLAGS,
+					&unused
+				) == SUCCESS;
+				if (!in_handler) {
+					char *p;
+					size_t len = spprintf(&p, 0, "Content-Type: %s; charset=%s",  mimetype, charset);
+					if (sapi_add_header(p, len, 0) != FAILURE) {
+						SG(sapi_headers).send_default_content_type = 0;
+					}
 				}
 			}
 
@@ -2776,7 +2788,7 @@ try_again:
 			case IS_FALSE:
 			case IS_LONG:
 			case IS_DOUBLE:
-				ZVAL_COPY(&entry_tmp, entry);
+				ZVAL_COPY_VALUE(&entry_tmp, entry);
 				break;
 			case IS_ARRAY:
 				chash = php_mb_convert_encoding_recursive(
@@ -4494,7 +4506,7 @@ PHP_FUNCTION(mb_send_mail)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (str_headers) {
-		if (strlen(ZSTR_VAL(str_headers)) != ZSTR_LEN(str_headers)) {
+		if (UNEXPECTED(zend_str_has_nul_byte(str_headers))) {
 			zend_argument_value_error(4, "must not contain any null bytes");
 			RETURN_THROWS();
 		}

@@ -257,6 +257,8 @@ typedef enum _ir_type {
 	_(UGE,          d2,   def, def, ___) /* unsigned greater or equal   */ \
 	_(ULE,          d2,   def, def, ___) /* unsigned less or equal      */ \
 	_(UGT,          d2,   def, def, ___) /* unsigned greater            */ \
+	_(ORDERED,      d2,   def, def, ___) /* both operands are not NAN   */ \
+	_(UNORDERED,    d2,   def, def, ___) /* one of operands is NAN      */ \
 	\
 	/* arithmetic ops                                                   */ \
 	_(ADD,          d2C,  def, def, ___) /* addition                    */ \
@@ -310,6 +312,8 @@ typedef enum _ir_type {
 	_(PHI,          pN,   reg, def, def) /* SSA Phi function            */ \
 	_(COPY,         d1X1, def, opt, ___) /* COPY (last foldable op)     */ \
 	_(PI,           p2,   reg, def, ___) /* e-SSA Pi constraint ???     */ \
+	_(ARGVAL,       d1X2, def, num, num) /* pass struct arg by value    */ \
+	                                     /* (op2 - size, op3 - align)   */ \
 	/* (USE, RENAME)                                                    */ \
 	\
 	/* data ops                                                         */ \
@@ -343,7 +347,8 @@ typedef enum _ir_type {
 	_(VA_START,     x2,   src, def, ___) /* va_start(va_list)           */ \
 	_(VA_END,       x2,   src, def, ___) /* va_end(va_list)             */ \
 	_(VA_COPY,      x3,   src, def, def) /* va_copy(dst, stc)           */ \
-	_(VA_ARG,       x2,   src, def, ___) /* va_arg(va_list)             */ \
+	_(VA_ARG,       x2X1, src, def, opt) /* va_arg(va_list)             */ \
+	                                     /* op3 - (size<<3)+log2(align) */ \
 	\
 	/* guards                                                           */ \
 	_(GUARD,        c3,   src, def, def) /* IF without second successor */ \
@@ -359,6 +364,7 @@ typedef enum _ir_type {
 	_(IF_TRUE,      S1X1, src, prb, ___) /* IF TRUE proj.               */ \
 	_(IF_FALSE,     S1X1, src, prb, ___) /* IF FALSE proj.              */ \
 	_(CASE_VAL,     S2X1, src, def, prb) /* switch proj.                */ \
+	_(CASE_RANGE,   S3,   src, def, def) /* switch proj.                */ \
 	_(CASE_DEFAULT, S1X1, src, prb, ___) /* switch proj.                */ \
 	_(MERGE,        SN,   src, src, src) /* control merge               */ \
 	_(LOOP_BEGIN,   SN,   src, src, src) /* loop start                  */ \
@@ -582,12 +588,22 @@ typedef struct _ir_code_buffer {
 	void *pos;
 } ir_code_buffer;
 
+typedef struct {
+	int   size;
+	int   align;
+	int   offset;
+} ir_value_param;
+
+#define IR_CONST_HASH_SIZE 64
+
 struct _ir_ctx {
 	ir_insn           *ir_base;                 /* two directional array - instructions grow down, constants grow up */
 	ir_ref             insns_count;             /* number of instructions stored in instructions buffer */
 	ir_ref             insns_limit;             /* size of allocated instructions buffer (it's extended when overflow) */
 	ir_ref             consts_count;            /* number of constants stored in constants buffer */
 	ir_ref             consts_limit;            /* size of allocated constants buffer (it's extended when overflow) */
+	uintptr_t          const_hash_mask;
+	ir_ref            *const_hash;
 	uint32_t           flags;                   /* IR context flags (see IR_* defines above) */
 	uint32_t           flags2;                  /* IR context private flags (see IR_* defines in ir_private.h) */
 	ir_type            ret_type;                /* Function return type */
@@ -595,6 +611,7 @@ struct _ir_ctx {
 	int32_t            status;                  /* non-zero error code (see IR_ERROR_... macros), app may use negative codes */
 	ir_ref             fold_cse_limit;          /* CSE finds identical insns backward from "insn_count" to "fold_cse_limit" */
 	ir_insn            fold_insn;               /* temporary storage for folding engine */
+	ir_value_param    *value_params;            /* information about "by-val" struct parameters */
 	ir_hashtab        *binding;
 	ir_use_list       *use_lists;               /* def->use lists for each instruction */
 	ir_ref            *use_edges;               /* the actual uses: use = ctx->use_edges[ctx->use_lists[def].refs + n] */
@@ -654,7 +671,7 @@ struct _ir_ctx {
 	ir_loader         *loader;
 	ir_strtab          strtab;
 	ir_ref             prev_insn_chain[IR_LAST_FOLDABLE_OP + 1];
-	ir_ref             prev_const_chain[IR_LAST_TYPE];
+	ir_ref             _const_hash[IR_CONST_HASH_SIZE];
 };
 
 /* Basic IR Construction API (implementation in ir.c) */
@@ -854,6 +871,9 @@ void ir_gdb_unregister_all(void);
 bool ir_gdb_present(void);
 
 /* IR load API (implementation in ir_load.c) */
+#define IR_RESOLVE_SYM_ADD_THUNK (1<<0)
+#define IR_RESOLVE_SYM_SILENT    (1<<1)
+
 struct _ir_loader {
 	uint32_t default_func_flags;
 	bool (*init_module)       (ir_loader *loader, const char *name, const char *filename, const char *target);
@@ -870,7 +890,7 @@ struct _ir_loader {
 	bool (*sym_data_end)      (ir_loader *loader, uint32_t flags);
 	bool (*func_init)         (ir_loader *loader, ir_ctx *ctx, const char *name);
 	bool (*func_process)      (ir_loader *loader, ir_ctx *ctx, const char *name);
-	void*(*resolve_sym_name)  (ir_loader *loader, const char *name, bool add_thunk);
+	void*(*resolve_sym_name)  (ir_loader *loader, const char *name, uint32_t flags);
 	bool (*has_sym)           (ir_loader *loader, const char *name);
 	bool (*add_sym)           (ir_loader *loader, const char *name, void *addr);
 };
@@ -884,13 +904,15 @@ int ir_load_llvm_bitcode(ir_loader *loader, const char *filename);
 int ir_load_llvm_asm(ir_loader *loader, const char *filename);
 
 /* IR save API (implementation in ir_save.c) */
-#define IR_SAVE_CFG       (1<<0) /* add info about CFG */
-#define IR_SAVE_CFG_MAP   (1<<1) /* add info about CFG block assignment */
-#define IR_SAVE_USE_LISTS (1<<2) /* add info about def->use lists */
-#define IR_SAVE_RULES     (1<<3) /* add info about selected code-generation rules */
-#define IR_SAVE_REGS      (1<<4) /* add info about selected registers */
+#define IR_SAVE_CFG        (1<<0) /* add info about CFG */
+#define IR_SAVE_CFG_MAP    (1<<1) /* add info about CFG block assignment */
+#define IR_SAVE_USE_LISTS  (1<<2) /* add info about def->use lists */
+#define IR_SAVE_RULES      (1<<3) /* add info about selected code-generation rules */
+#define IR_SAVE_REGS       (1<<4) /* add info about selected registers */
+#define IR_SAVE_SAFE_NAMES (1<<5) /* add '@' prefix to symbol names */
 
 void ir_print_proto(const ir_ctx *ctx, ir_ref proto, FILE *f);
+void ir_print_proto_ex(uint8_t flags, ir_type ret_type, uint32_t params_count, const uint8_t *param_types, FILE *f);
 void ir_save(const ir_ctx *ctx, uint32_t save_flags, FILE *f);
 
 /* IR debug dump API (implementation in ir_dump.c) */
@@ -1012,6 +1034,7 @@ IR_ALWAYS_INLINE void *ir_jit_compile(ir_ctx *ctx, int opt_level, size_t *size)
 #define IR_ERROR_UNSUPPORTED_CODE_RULE           3
 #define IR_ERROR_LINK                            4
 #define IR_ERROR_ENCODE                          5
+#define IR_ERROR_TOO_LARGE                       6
 
 /* IR Memmory Allocation */
 #ifndef ir_mem_malloc

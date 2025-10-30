@@ -22,6 +22,7 @@
 #include "php.h"
 #if defined(HAVE_LIBXML) && defined(HAVE_DOM)
 #include "php_dom.h"
+#include "obj_map.h"
 #include "dom_properties.h"
 #include "internal_helpers.h"
 
@@ -33,7 +34,11 @@ Since:
 zend_result dom_documenttype_name_read(dom_object *obj, zval *retval)
 {
 	DOM_PROP_NODE(xmlDtdPtr, dtdptr, obj);
-	ZVAL_STRING(retval, dtdptr->name ? (char *) (dtdptr->name) : "");
+	if (dtdptr->name) {
+		ZVAL_STRING(retval, (const char *) dtdptr->name);
+	} else {
+		ZVAL_EMPTY_STRING(retval);
+	}
 	return SUCCESS;
 }
 
@@ -53,7 +58,7 @@ zend_result dom_documenttype_entities_read(dom_object *obj, zval *retval)
 	xmlHashTable *entityht = (xmlHashTable *) dtdptr->entities;
 
 	dom_object *intern = Z_DOMOBJ_P(retval);
-	dom_namednode_iter(obj, XML_ENTITY_NODE, intern, entityht, NULL, NULL);
+	php_dom_create_obj_map(obj, intern, entityht, NULL, NULL, &php_dom_obj_map_entities);
 
 	return SUCCESS;
 }
@@ -74,7 +79,7 @@ zend_result dom_documenttype_notations_read(dom_object *obj, zval *retval)
 	xmlHashTable *notationht = (xmlHashTable *) dtdptr->notations;
 
 	dom_object *intern = Z_DOMOBJ_P(retval);
-	dom_namednode_iter(obj, XML_NOTATION_NODE, intern, notationht, NULL, NULL);
+	php_dom_create_obj_map(obj, intern, notationht, NULL, NULL, &php_dom_obj_map_notations);
 
 	return SUCCESS;
 }

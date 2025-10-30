@@ -280,6 +280,7 @@ static zend_result get_hash_key(spl_hash_key *key, spl_array_object *intern, zva
 try_again:
 	switch (Z_TYPE_P(offset)) {
 	case IS_NULL:
+		zend_error(E_DEPRECATED, "Using null as an array offset is deprecated, use an empty string instead");
 		key->key = ZSTR_EMPTY_ALLOC();
 		return SUCCESS;
 	case IS_STRING:
@@ -620,13 +621,13 @@ static bool spl_array_has_dimension_ex(bool check_inherited, zend_object *object
 
 		if (!zend_is_true(&rv)) {
 			zval_ptr_dtor(&rv);
-			return 0;
+			return false;
 		}
 		zval_ptr_dtor(&rv);
 
 		/* For isset calls we don't need to check the value, so return early */
 		if (!check_empty) {
-			return 1;
+			return true;
 		} else if (intern->fptr_offset_get) {
 			value = spl_array_read_dimension_ex(1, object, offset, BP_VAR_R, &rv);
 		}
@@ -638,7 +639,7 @@ static bool spl_array_has_dimension_ex(bool check_inherited, zend_object *object
 
 		if (get_hash_key(&key, intern, offset) == FAILURE) {
 			zend_illegal_container_offset(object->ce->name, offset, BP_VAR_IS);
-			return 0;
+			return false;
 		}
 
 		if (key.key) {
@@ -649,13 +650,13 @@ static bool spl_array_has_dimension_ex(bool check_inherited, zend_object *object
 		}
 
 		if (!tmp) {
-			return 0;
+			return false;
 		}
 
 		/* check_empty is only equal to 2 if it is called from offsetExists on this class,
 		 * where it needs to report an offset exists even if the value is null */
 		if (check_empty == 2) {
-			return 1;
+			return true;
 		}
 
 		if (check_empty && check_inherited && intern->fptr_offset_get) {
@@ -776,11 +777,11 @@ static HashTable *spl_array_get_properties_for(zend_object *object, zend_prop_pu
 	 * meantime. */
 	switch (purpose) {
 		case ZEND_PROP_PURPOSE_ARRAY_CAST:
-			dup = 1;
+			dup = true;
 			break;
 		case ZEND_PROP_PURPOSE_VAR_EXPORT:
 		case ZEND_PROP_PURPOSE_JSON:
-			dup = 0;
+			dup = false;
 			break;
 		default:
 			return zend_std_get_properties_for(object, purpose);
@@ -874,7 +875,7 @@ static zval *spl_array_get_property_ptr_ptr(zend_object *object, zend_string *na
 			return NULL;
 		}
 		ZVAL_STR(&member, name);
-		return spl_array_get_dimension_ptr(1, intern, object->ce->name, &member, type);
+		return spl_array_get_dimension_ptr(true, intern, object->ce->name, &member, type);
 	}
 	return zend_std_get_property_ptr_ptr(object, name, type, cache_slot);
 } /* }}} */
@@ -984,6 +985,12 @@ static void spl_array_set_array(zval *object, spl_array_object *intern, zval *ar
 			}
 		}
 	} else {
+		php_error_docref(NULL, E_DEPRECATED,
+			"Using an object as a backing array for %s is deprecated, as it allows violating class constraints and invariants",
+			instanceof_function(Z_OBJCE_P(object), spl_ce_ArrayIterator) ? "ArrayIterator" : "ArrayObject");
+		if (UNEXPECTED(EG(exception))) {
+			return;
+		}
 		if (Z_OBJ_HT_P(array) == &spl_handler_ArrayObject) {
 			ZVAL_COPY_VALUE(&garbage, &intern->array);
 			if (just_array)	{
@@ -1133,7 +1140,7 @@ PHP_METHOD(ArrayObject, exchangeArray)
 	}
 
 	RETVAL_ARR(zend_array_dup(spl_array_get_hash_table(intern)));
-	spl_array_set_array(object, intern, array, 0L, 1);
+	spl_array_set_array(object, intern, array, 0L, true);
 }
 /* }}} */
 
@@ -1203,43 +1210,54 @@ PHP_METHOD(ArrayObject, count)
 	RETURN_LONG(spl_array_object_count_elements_helper(intern));
 } /* }}} */
 
-static void spl_array_method(INTERNAL_FUNCTION_PARAMETERS, char *fname, size_t fname_len, int use_arg) /* {{{ */
+enum spl_array_object_sort_methods {
+	SPL_NAT_SORT,
+	SPL_CALLBACK_SORT,
+	SPL_OPTIONAL_FLAG_SORT
+};
+
+static void spl_array_method(INTERNAL_FUNCTION_PARAMETERS, const char *fname, size_t fname_len, enum spl_array_object_sort_methods use_arg) /* {{{ */
 {
 	spl_array_object *intern = Z_SPLARRAY_P(ZEND_THIS);
 	HashTable **ht_ptr = spl_array_get_hash_table_ptr(intern);
 	HashTable *aht = *ht_ptr;
-	zval function_name, params[2], *arg = NULL;
+	zval params[2], *arg = NULL;
 
-	ZVAL_STRINGL(&function_name, fname, fname_len);
+	zend_function *fn = zend_hash_str_find_ptr(EG(function_table), fname, fname_len);
+	if (UNEXPECTED(fn == NULL)) {
+		zend_throw_error(NULL, "Cannot call method %s when function %s is disabled", fname, fname);
+		RETURN_THROWS();
+	}
 
 	ZVAL_NEW_EMPTY_REF(&params[0]);
 	ZVAL_ARR(Z_REFVAL(params[0]), aht);
 	GC_ADDREF(aht);
 
-	if (!use_arg) {
+	if (use_arg == SPL_NAT_SORT) {
 		if (zend_parse_parameters_none() == FAILURE) {
 			goto exit;
 		}
 
 		intern->nApplyCount++;
-		call_user_function(EG(function_table), NULL, &function_name, return_value, 1, params);
+		zend_call_known_function(fn, NULL, NULL, return_value, 1, params, NULL);
 		intern->nApplyCount--;
-	} else if (use_arg == SPL_ARRAY_METHOD_SORT_FLAGS_ARG) {
+	} else if (use_arg == SPL_OPTIONAL_FLAG_SORT) {
 		zend_long sort_flags = 0;
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "|l", &sort_flags) == FAILURE) {
 			goto exit;
 		}
 		ZVAL_LONG(&params[1], sort_flags);
 		intern->nApplyCount++;
-		call_user_function(EG(function_table), NULL, &function_name, return_value, 2, params);
+		zend_call_known_function(fn, NULL, NULL, return_value, 2, params, NULL);
 		intern->nApplyCount--;
 	} else {
+		ZEND_ASSERT(use_arg == SPL_CALLBACK_SORT);
 		if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &arg) == FAILURE) {
 			goto exit;
 		}
 		ZVAL_COPY_VALUE(&params[1], arg);
 		intern->nApplyCount++;
-		call_user_function(EG(function_table), NULL, &function_name, return_value, 2, params);
+		zend_call_known_function(fn, NULL, NULL, return_value, 2, params, NULL);
 		intern->nApplyCount--;
 	}
 
@@ -1251,7 +1269,6 @@ exit:
 		*ht_ptr = Z_ARRVAL_P(ht_zv);
 		ZVAL_NULL(ht_zv);
 		zval_ptr_dtor(&params[0]);
-		zend_string_free(Z_STR(function_name));
 	}
 } /* }}} */
 
@@ -1261,23 +1278,23 @@ PHP_METHOD(cname, fname) \
 	spl_array_method(INTERNAL_FUNCTION_PARAM_PASSTHRU, #fname, sizeof(#fname)-1, use_arg); \
 }
 
-/* {{{ Sort the entries by values. */
-SPL_ARRAY_METHOD(ArrayObject, asort, SPL_ARRAY_METHOD_SORT_FLAGS_ARG) /* }}} */
+/* Sort the entries by values. */
+SPL_ARRAY_METHOD(ArrayObject, asort, SPL_OPTIONAL_FLAG_SORT)
 
-/* {{{ Sort the entries by key. */
-SPL_ARRAY_METHOD(ArrayObject, ksort, SPL_ARRAY_METHOD_SORT_FLAGS_ARG) /* }}} */
+/* Sort the entries by key. */
+SPL_ARRAY_METHOD(ArrayObject, ksort, SPL_OPTIONAL_FLAG_SORT)
 
-/* {{{ Sort the entries by values user defined function. */
-SPL_ARRAY_METHOD(ArrayObject, uasort, SPL_ARRAY_METHOD_CALLBACK_ARG) /* }}} */
+/* Sort the entries by values user defined function. */
+SPL_ARRAY_METHOD(ArrayObject, uasort, SPL_CALLBACK_SORT)
 
-/* {{{ Sort the entries by key using user defined function. */
-SPL_ARRAY_METHOD(ArrayObject, uksort, SPL_ARRAY_METHOD_CALLBACK_ARG) /* }}} */
+/* Sort the entries by key using user defined function. */
+SPL_ARRAY_METHOD(ArrayObject, uksort, SPL_CALLBACK_SORT)
 
-/* {{{ Sort the entries by values using "natural order" algorithm. */
-SPL_ARRAY_METHOD(ArrayObject, natsort, SPL_ARRAY_METHOD_NO_ARG) /* }}} */
+/* Sort the entries by values using "natural order" algorithm. */
+SPL_ARRAY_METHOD(ArrayObject, natsort, SPL_NAT_SORT)
 
-/* {{{ Sort the entries by key using case insensitive "natural order" algorithm. */
-SPL_ARRAY_METHOD(ArrayObject, natcasesort, SPL_ARRAY_METHOD_NO_ARG) /* }}} */
+/* {{{ Sort the entries by key using case-insensitive "natural order" algorithm. */
+SPL_ARRAY_METHOD(ArrayObject, natcasesort, SPL_NAT_SORT)
 
 /* {{{ Serialize the object */
 PHP_METHOD(ArrayObject, serialize)
@@ -1396,7 +1413,7 @@ PHP_METHOD(ArrayObject, unserialize)
 			ZVAL_NULL(array);
 			SEPARATE_ARRAY(&intern->array);
 		} else {
-			spl_array_set_array(object, intern, array, 0L, 1);
+			spl_array_set_array(object, intern, array, 0L, true);
 		}
 
 		if (*p != ';') {
@@ -1509,7 +1526,7 @@ PHP_METHOD(ArrayObject, __unserialize)
 			zend_throw_exception(spl_ce_InvalidArgumentException, "Passed variable is not an array or object", 0);
 			RETURN_THROWS();
 		}
-		spl_array_set_array(ZEND_THIS, intern, storage_zv, 0L, 1);
+		spl_array_set_array(ZEND_THIS, intern, storage_zv, 0L, true);
 	}
 
 	object_properties_load(&intern->std, Z_ARRVAL_P(members_zv));

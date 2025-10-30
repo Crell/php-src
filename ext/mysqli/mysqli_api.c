@@ -324,10 +324,10 @@ PHP_FUNCTION(mysqli_data_seek)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	if (mysqli_result_is_unbuffered(result)) {
-		if (getThis()) {
+		if (hasThis()) {
 			zend_throw_error(NULL, "mysqli_result::data_seek() cannot be used in MYSQLI_USE_RESULT mode");
 		} else {
 			zend_throw_error(NULL, "mysqli_data_seek() cannot be used in MYSQLI_USE_RESULT mode");
@@ -670,7 +670,7 @@ PHP_FUNCTION(mysqli_fetch_field)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	if (!(field = mysql_fetch_field(result))) {
 		RETURN_FALSE;
@@ -694,7 +694,7 @@ PHP_FUNCTION(mysqli_fetch_fields)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	array_init(return_value);
 	num_fields = mysql_num_fields(result);
@@ -727,7 +727,7 @@ PHP_FUNCTION(mysqli_fetch_field_direct)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	if (offset >= (zend_long) mysql_num_fields(result)) {
 		zend_argument_value_error(ERROR_ARG_POS(2), "must be less than the number of fields for this result set");
@@ -755,7 +755,7 @@ PHP_FUNCTION(mysqli_fetch_lengths)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	// TODO Warning?
 	if (!(ret = mysql_fetch_lengths(result))) {
@@ -809,7 +809,7 @@ PHP_FUNCTION(mysqli_field_seek)
 		RETURN_THROWS();
 	}
 
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	if ((uint32_t)fieldnr >= mysql_num_fields(result)) {
 		zend_argument_value_error(ERROR_ARG_POS(2), "must be less than the number of fields for this result set");
@@ -830,7 +830,7 @@ PHP_FUNCTION(mysqli_field_tell)
 	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &mysql_result, mysqli_result_class_entry) == FAILURE) {
 		RETURN_THROWS();
 	}
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	RETURN_LONG(mysql_field_tell(result));
 }
@@ -845,7 +845,7 @@ PHP_FUNCTION(mysqli_free_result)
 	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &mysql_result, mysqli_result_class_entry) == FAILURE) {
 		RETURN_THROWS();
 	}
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	mysqli_free_result(result, false);
 	MYSQLI_CLEAR_RESOURCE(mysql_result);
@@ -855,7 +855,7 @@ PHP_FUNCTION(mysqli_free_result)
 /* {{{ Get MySQL client info */
 PHP_FUNCTION(mysqli_get_client_info)
 {
-	if (getThis()) {
+	if (hasThis()) {
 		if (zend_parse_parameters_none() == FAILURE) {
 			RETURN_THROWS();
 		}
@@ -1123,7 +1123,7 @@ PHP_FUNCTION(mysqli_num_fields)
 	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &mysql_result, mysqli_result_class_entry) == FAILURE) {
 		RETURN_THROWS();
 	}
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	RETURN_LONG(mysql_num_fields(result));
 }
@@ -1138,7 +1138,7 @@ PHP_FUNCTION(mysqli_num_rows)
 	if (zend_parse_method_parameters(ZEND_NUM_ARGS(), getThis(), "O", &mysql_result, mysqli_result_class_entry) == FAILURE) {
 		RETURN_THROWS();
 	}
-	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, "mysqli_result", MYSQLI_STATUS_VALID);
+	MYSQLI_FETCH_RESOURCE(result, MYSQL_RES *, mysql_result, MYSQLI_STATUS_VALID);
 
 	if (mysqli_result_is_unbuffered_and_not_everything_is_fetched(result)) {
 		zend_throw_error(NULL, "mysqli_num_rows() cannot be used in MYSQLI_USE_RESULT mode");

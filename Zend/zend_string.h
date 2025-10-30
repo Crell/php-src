@@ -70,15 +70,6 @@ END_EXTERN_C()
 #define ZSTR_H(zstr)    (zstr)->h
 #define ZSTR_HASH(zstr) zend_string_hash_val(zstr)
 
-/* Compatibility macros */
-
-#define IS_INTERNED(s)	ZSTR_IS_INTERNED(s)
-#define STR_EMPTY_ALLOC()	ZSTR_EMPTY_ALLOC()
-#define _STR_HEADER_SIZE _ZSTR_HEADER_SIZE
-#define STR_ALLOCA_ALLOC(str, _len, use_heap) ZSTR_ALLOCA_ALLOC(str, _len, use_heap)
-#define STR_ALLOCA_INIT(str, s, len, use_heap) ZSTR_ALLOCA_INIT(str, s, len, use_heap)
-#define STR_ALLOCA_FREE(str, use_heap) ZSTR_ALLOCA_FREE(str, use_heap)
-
 /*---*/
 
 #define ZSTR_IS_INTERNED(s)					(GC_FLAGS(s) & IS_STR_INTERNED)
@@ -132,7 +123,7 @@ END_EXTERN_C()
 
 #define ZSTR_ALLOCA_FREE(str, use_heap) free_alloca(str, use_heap)
 
-#define ZSTR_INIT_LITERAL(s, persistent) (zend_string_init((s), strlen(s), (persistent)))
+#define ZSTR_INIT_LITERAL(s, persistent) (zend_string_init(("" s), sizeof(s) - 1, (persistent)))
 
 /*---*/
 
@@ -411,7 +402,7 @@ static zend_always_inline bool zend_string_starts_with(const zend_string *str, c
 }
 
 #define zend_string_starts_with_literal(str, prefix) \
-	zend_string_starts_with_cstr(str, prefix, strlen(prefix))
+	zend_string_starts_with_cstr(str, "" prefix, sizeof(prefix) - 1)
 
 static zend_always_inline bool zend_string_starts_with_cstr_ci(const zend_string *str, const char *prefix, size_t prefix_length)
 {
@@ -424,7 +415,7 @@ static zend_always_inline bool zend_string_starts_with_ci(const zend_string *str
 }
 
 #define zend_string_starts_with_literal_ci(str, prefix) \
-	zend_string_starts_with_cstr_ci(str, prefix, strlen(prefix))
+	zend_string_starts_with_cstr_ci(str, "" prefix, sizeof(prefix) - 1)
 
 /*
  * DJBX33A (Daniel J. Bernstein, Times 33 with Addition)
@@ -575,6 +566,7 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_UNKNOWN,                "unknown") \
 	_(ZEND_STR_UNKNOWN_CAPITALIZED,    "Unknown") \
 	_(ZEND_STR_EXIT,                   "exit") \
+	_(ZEND_STR_CLONE,                  "clone") \
 	_(ZEND_STR_EVAL,                   "eval") \
 	_(ZEND_STR_INCLUDE,                "include") \
 	_(ZEND_STR_REQUIRE,                "require") \
@@ -597,7 +589,9 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_HOST,                   "host") \
 	_(ZEND_STR_PORT,                   "port") \
 	_(ZEND_STR_USER,                   "user") \
+	_(ZEND_STR_USERNAME,               "username") \
 	_(ZEND_STR_PASS,                   "pass") \
+	_(ZEND_STR_PASSWORD,               "password") \
 	_(ZEND_STR_PATH,                   "path") \
 	_(ZEND_STR_QUERY,                  "query") \
 	_(ZEND_STR_FRAGMENT,               "fragment") \
@@ -642,6 +636,12 @@ EMPTY_SWITCH_DEFAULT_CASE()
 	_(ZEND_STR_SINCE,                  "since") \
 	_(ZEND_STR_GET,                    "get") \
 	_(ZEND_STR_SET,                    "set") \
+	_(ZEND_STR_8_DOT_0,                "8.0") \
+	_(ZEND_STR_8_DOT_1,                "8.1") \
+	_(ZEND_STR_8_DOT_2,                "8.2") \
+	_(ZEND_STR_8_DOT_3,                "8.3") \
+	_(ZEND_STR_8_DOT_4,                "8.4") \
+	_(ZEND_STR_8_DOT_5,                "8.5") \
 
 
 typedef enum _zend_known_string_id {

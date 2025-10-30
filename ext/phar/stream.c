@@ -191,7 +191,7 @@ static php_stream * phar_wrapper_open_url(php_stream_wrapper *wrapper, const cha
 	/* strip leading "/" */
 	internal_file = estrndup(ZSTR_VAL(resource->path) + 1, ZSTR_LEN(resource->path) - 1);
 	if (mode[0] == 'w' || (mode[0] == 'r' && mode[1] == '+')) {
-		if (NULL == (idata = phar_get_or_create_entry_data(ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, strlen(internal_file), mode, 0, &error, 1))) {
+		if (NULL == (idata = phar_get_or_create_entry_data(ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, strlen(internal_file), mode, 0, &error, true))) {
 			if (error) {
 				php_stream_wrapper_log_error(wrapper, options, "%s", error);
 				efree(error);
@@ -225,7 +225,7 @@ static php_stream * phar_wrapper_open_url(php_stream_wrapper *wrapper, const cha
 
 				metadata = pzoption;
 				ZVAL_COPY_DEREF(&idata->internal_file->metadata_tracker.val, metadata);
-				idata->phar->is_modified = 1;
+				idata->phar->is_modified = true;
 			}
 		}
 		if (opened_path) {
@@ -242,7 +242,7 @@ static php_stream * phar_wrapper_open_url(php_stream_wrapper *wrapper, const cha
 				return NULL;
 			}
 			if (phar->is_tar || phar->is_zip) {
-				if ((FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), ".phar/stub.php", sizeof(".phar/stub.php")-1, "r", 0, &error, 0)) || !idata) {
+				if ((FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), ".phar/stub.php", sizeof(".phar/stub.php")-1, "r", 0, &error, false)) || !idata) {
 					goto idata_error;
 				}
 				efree(internal_file);
@@ -290,7 +290,7 @@ static php_stream * phar_wrapper_open_url(php_stream_wrapper *wrapper, const cha
 			}
 		}
 		/* read-only access is allowed to magic files in .phar directory */
-		if ((FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, strlen(internal_file), "r", 0, &error, 0)) || !idata) {
+		if ((FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, strlen(internal_file), "r", 0, &error, false)) || !idata) {
 idata_error:
 			if (error) {
 				php_stream_wrapper_log_error(wrapper, options, "%s", error);
@@ -445,18 +445,18 @@ static ssize_t phar_stream_write(php_stream *stream, const char *buf, size_t cou
 {
 	phar_entry_data *data = (phar_entry_data *) stream->abstract;
 
-	php_stream_seek(data->fp, data->position, SEEK_SET);
+	php_stream_seek(data->fp, data->position + data->zero, SEEK_SET);
 	if (count != php_stream_write(data->fp, buf, count)) {
-		php_stream_wrapper_log_error(stream->wrapper, stream->flags, "phar error: Could not write %d characters to \"%s\" in phar \"%s\"", (int) count, ZSTR_VAL(data->internal_file->filename), data->phar->fname);
+		php_stream_wrapper_log_error(stream->wrapper, stream->flags, "phar error: Could not write %zu characters to \"%s\" in phar \"%s\"", count, ZSTR_VAL(data->internal_file->filename), data->phar->fname);
 		return -1;
 	}
-	data->position = php_stream_tell(data->fp);
+	data->position = php_stream_tell(data->fp) - data->zero;
 	if (data->position > (zend_off_t)data->internal_file->uncompressed_filesize) {
 		data->internal_file->uncompressed_filesize = data->position;
 	}
 	data->internal_file->compressed_filesize = data->internal_file->uncompressed_filesize;
 	data->internal_file->old_flags = data->internal_file->flags;
-	data->internal_file->is_modified = 1;
+	data->internal_file->is_modified = true;
 	return count;
 }
 /* }}} */
@@ -546,7 +546,7 @@ static int phar_stream_stat(php_stream *stream, php_stream_statbuf *ssb) /* {{{ 
 		return -1;
 	}
 
-	phar_dostat(data->phar, data->internal_file, ssb, 0);
+	phar_dostat(data->phar, data->internal_file, ssb, false);
 	return 0;
 }
 /* }}} */
@@ -558,7 +558,7 @@ static int phar_wrapper_stat(php_stream_wrapper *wrapper, const char *url, int f
 				  php_stream_statbuf *ssb, php_stream_context *context) /* {{{ */
 {
 	php_url *resource = NULL;
-	char *internal_file, *error;
+	char *internal_file;
 	phar_archive_data *phar;
 	phar_entry_info *entry;
 	size_t internal_file_len;
@@ -582,19 +582,13 @@ static int phar_wrapper_stat(php_stream_wrapper *wrapper, const char *url, int f
 
 	internal_file = ZSTR_VAL(resource->path) + 1; /* strip leading "/" */
 	/* find the phar in our trusty global hash indexed by alias (host of phar://blah.phar/file.whatever) */
-	if (FAILURE == phar_get_archive(&phar, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), NULL, 0, &error)) {
+	if (FAILURE == phar_get_archive(&phar, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), NULL, 0, NULL)) {
 		php_url_free(resource);
-		if (error) {
-			efree(error);
-		}
 		return FAILURE;
-	}
-	if (error) {
-		efree(error);
 	}
 	if (*internal_file == '\0') {
 		/* root directory requested */
-		phar_dostat(phar, NULL, ssb, 1);
+		phar_dostat(phar, NULL, ssb, true);
 		php_url_free(resource);
 		return SUCCESS;
 	}
@@ -605,12 +599,12 @@ static int phar_wrapper_stat(php_stream_wrapper *wrapper, const char *url, int f
 	internal_file_len = strlen(internal_file);
 	/* search through the manifest of files, and if we have an exact match, it's a file */
 	if (NULL != (entry = zend_hash_str_find_ptr(&phar->manifest, internal_file, internal_file_len))) {
-		phar_dostat(phar, entry, ssb, 0);
+		phar_dostat(phar, entry, ssb, false);
 		php_url_free(resource);
 		return SUCCESS;
 	}
 	if (zend_hash_str_exists(&(phar->virtual_dirs), internal_file, internal_file_len)) {
-		phar_dostat(phar, NULL, ssb, 1);
+		phar_dostat(phar, NULL, ssb, true);
 		php_url_free(resource);
 		return SUCCESS;
 	}
@@ -646,7 +640,7 @@ static int phar_wrapper_stat(php_stream_wrapper *wrapper, const char *url, int f
 				if (NULL == (entry = zend_hash_str_find_ptr(&phar->manifest, internal_file, internal_file_len))) {
 					goto free_resource;
 				}
-				phar_dostat(phar, entry, ssb, 0);
+				phar_dostat(phar, entry, ssb, false);
 				php_url_free(resource);
 				return SUCCESS;
 			}
@@ -665,7 +659,7 @@ static int phar_wrapper_unlink(php_stream_wrapper *wrapper, const char *url, int
 {
 	php_url *resource;
 	char *internal_file, *error;
-	int internal_file_len;
+	size_t internal_file_len;
 	phar_entry_data *idata;
 	phar_archive_data *pphar;
 
@@ -699,7 +693,7 @@ static int phar_wrapper_unlink(php_stream_wrapper *wrapper, const char *url, int
 	/* need to copy to strip leading "/", will get touched again */
 	internal_file = estrndup(ZSTR_VAL(resource->path) + 1, ZSTR_LEN(resource->path) - 1);
 	internal_file_len = ZSTR_LEN(resource->path) - 1;
-	if (FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, internal_file_len, "r", 0, &error, 1)) {
+	if (FAILURE == phar_get_entry_data(&idata, ZSTR_VAL(resource->host), ZSTR_LEN(resource->host), internal_file, internal_file_len, "r", 0, &error, true)) {
 		/* constraints of fp refcount were not met */
 		if (error) {
 			php_stream_wrapper_log_error(wrapper, options, "unlink of \"%s\" failed: %s", url, error);
@@ -739,8 +733,8 @@ static int phar_wrapper_rename(php_stream_wrapper *wrapper, const char *url_from
 	char *error;
 	phar_archive_data *phar, *pfrom, *pto;
 	phar_entry_info *entry;
-	int is_dir = 0;
-	int is_modified = 0;
+	bool is_dir = false;
+	bool is_modified = false;
 
 	error = NULL;
 
@@ -861,8 +855,8 @@ static int phar_wrapper_rename(php_stream_wrapper *wrapper, const char *url_from
 			zend_hash_del(&phar->manifest, entry->filename);
 			return 0;
 		}
-		is_modified = 1;
-		entry->is_modified = 1;
+		is_modified = true;
+		entry->is_modified = true;
 		is_dir = entry->is_dir;
 	} else {
 		is_dir = zend_hash_str_exists(&(phar->virtual_dirs), ZSTR_VAL(resource_from->path)+1, ZSTR_LEN(resource_from->path)-1);
@@ -897,8 +891,8 @@ static int phar_wrapper_rename(php_stream_wrapper *wrapper, const char *url_from
 				memcpy(ZSTR_VAL(new_str_key) + to_len, ZSTR_VAL(str_key) + from_len, ZSTR_LEN(str_key) - from_len);
 				ZSTR_VAL(new_str_key)[ZSTR_LEN(new_str_key)] = 0;
 
-				is_modified = 1;
-				entry->is_modified = 1;
+				is_modified = true;
+				entry->is_modified = true;
 				zend_string_release(entry->filename);
 				entry->filename = zend_string_copy(new_str_key);
 

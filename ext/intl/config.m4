@@ -18,36 +18,13 @@ if test "$PHP_INTL" != "no"; then
       collator/collator_locale.c
       collator/collator_sort.c
       common/common_error.c
-      converter/converter.c
-      dateformat/dateformat_attr.c
       dateformat/dateformat_class.c
-      dateformat/dateformat_data.c
-      dateformat/dateformat_format.c
-      dateformat/dateformat_parse.c
-      dateformat/dateformat.c
-      formatter/formatter_attr.c
       formatter/formatter_class.c
-      formatter/formatter_data.c
-      formatter/formatter_format.c
-      formatter/formatter_main.c
-      formatter/formatter_parse.c
       grapheme/grapheme_string.c
       grapheme/grapheme_util.c
-      idn/idn.c
       intl_convert.c
       intl_error.c
-      locale/locale_class.c
-      locale/locale_methods.c
-      locale/locale.c
       listformatter/listformatter_class.c
-      msgformat/msgformat_attr.c
-      msgformat/msgformat_class.c
-      msgformat/msgformat_data.c
-      msgformat/msgformat_format.c
-      msgformat/msgformat_parse.c
-      msgformat/msgformat.c
-      normalizer/normalizer_class.c
-      normalizer/normalizer_normalize.c
       php_intl.c
       resourcebundle/resourcebundle_class.c
       resourcebundle/resourcebundle_iterator.c
@@ -57,7 +34,6 @@ if test "$PHP_INTL" != "no"; then
       spoofchecker/spoofchecker_main.c
       transliterator/transliterator_class.c
       transliterator/transliterator_methods.c
-      uchar/uchar.c
     ]),
     [$ext_shared],,
     [$INTL_COMMON_FLAGS],
@@ -66,24 +42,49 @@ if test "$PHP_INTL" != "no"; then
   PHP_INTL_CXX_SOURCES="intl_convertcpp.cpp \
     common/common_enum.cpp \
     common/common_date.cpp \
-    dateformat/dateformat_format_object.cpp \
-    dateformat/dateformat_create.cpp \
+    converter/converter.cpp \
+    dateformat/dateformat.cpp \
+    dateformat/dateformat_attr.cpp \
     dateformat/dateformat_attrcpp.cpp \
+    dateformat/dateformat_create.cpp \
+    dateformat/dateformat_data.cpp \
+    dateformat/dateformat_format.cpp \
+    dateformat/dateformat_format_object.cpp \
     dateformat/dateformat_helpers.cpp \
+    dateformat/dateformat_parse.cpp \
     dateformat/datepatterngenerator_class.cpp \
     dateformat/datepatterngenerator_methods.cpp \
     msgformat/msgformat_helpers.cpp \
+    rangeformatter/rangeformatter_class.cpp \
     timezone/timezone_class.cpp \
     timezone/timezone_methods.cpp \
     calendar/calendar_class.cpp \
     calendar/calendar_methods.cpp \
     calendar/gregoriancalendar_methods.cpp \
+    formatter/formatter_attr.cpp \
+    formatter/formatter_data.cpp \
+    formatter/formatter_format.cpp \
+    formatter/formatter_main.cpp \
+    formatter/formatter_parse.cpp \
+    msgformat/msgformat_attr.cpp \
+    msgformat/msgformat_class.cpp \
+    msgformat/msgformat_data.cpp \
+    msgformat/msgformat_format.cpp \
+    msgformat/msgformat_parse.cpp \
+    msgformat/msgformat.cpp \
+    normalizer/normalizer_class.cpp \
+    normalizer/normalizer_normalize.cpp \
     breakiterator/breakiterator_class.cpp \
     breakiterator/breakiterator_iterators.cpp \
     breakiterator/breakiterator_methods.cpp \
     breakiterator/rulebasedbreakiterator_methods.cpp \
     breakiterator/codepointiterator_internal.cpp \
-    breakiterator/codepointiterator_methods.cpp"
+    breakiterator/codepointiterator_methods.cpp \
+    idn/idn.cpp \
+    locale/locale_class.cpp \
+    locale/locale_methods.cpp \
+    locale/locale.cpp \
+    uchar/uchar.cpp"
 
   PHP_REQUIRE_CXX()
 
@@ -123,6 +124,7 @@ if test "$PHP_INTL" != "no"; then
     $ext_builddir/listformatter
     $ext_builddir/msgformat
     $ext_builddir/normalizer
+    $ext_builddir/rangeformatter
     $ext_builddir/resourcebundle
     $ext_builddir/spoofchecker
     $ext_builddir/timezone

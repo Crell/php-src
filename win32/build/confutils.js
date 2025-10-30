@@ -56,7 +56,7 @@ var WINVER = "0x0602"; /* 8/2012 */
 var MINBISON = "3.0.0";
 
 // There's a minimum requirement for re2c..
-var MINRE2C = "0.13.4";
+var MINRE2C = "1.0.3";
 
 /* Store the enabled extensions (summary + QA check) */
 var extensions_enabled = new Array();
@@ -95,10 +95,10 @@ if (typeof(CWD) == "undefined") {
 if (!MODE_PHPIZE) {
 	/* defaults; we pick up the precise versions from configure.ac */
 	var PHP_VERSION = 8;
-	var PHP_MINOR_VERSION = 5;
+	var PHP_MINOR_VERSION = 6;
 	var PHP_RELEASE_VERSION = 0;
 	var PHP_EXTRA_VERSION = "";
-	var PHP_VERSION_STRING = "8.5.0";
+	var PHP_VERSION_STRING = "8.6.0";
 }
 
 /* Get version numbers and DEFINE as a string */
@@ -2054,6 +2054,7 @@ function generate_tmp_php_ini()
 
 				/* Fallback is implied, if filecache is enabled. */
 				INI.WriteLine("opcache.file_cache=" + dir);
+				INI.WriteLine("opcache.record_warnings=1");
 				INI.WriteLine("opcache.enable=1");
 				INI.WriteLine("opcache.enable_cli=1");
 			}
